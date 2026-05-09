@@ -163,59 +163,46 @@ def load_test_records(db_path: str, cylinder: int, test_id: Any) -> pd.DataFrame
 
 
 def apply_page_style() -> None:
+    """Aplica uma camada visual de alto contraste sobre os componentes do Streamlit.
+
+    A regra central desta tela é operacional: fundo claro sempre recebe texto escuro,
+    fundo escuro sempre recebe texto claro, e controles interativos têm fundo próprio
+    para não dependerem do tema padrão do navegador ou do Streamlit.
+    """
+
     st.markdown(
         """
         <style>
             :root {
-                --bg: #f4f1ea;
-                --ink: #1f2a2e;
-                --muted: #647177;
-                --line: #ccd4d6;
-                --panel: #ffffff;
-                --panel-soft: #eef3f3;
-                --accent: #0d6f7d;
-                --accent-dark: #084f5b;
-                --danger: #a94232;
+                --page-bg: #e8edf0;
+                --page-ink: #111827;
+                --page-muted: #334155;
+                --panel-bg: #ffffff;
+                --panel-soft: #f8fafc;
+                --panel-line: #94a3b8;
+                --sidebar-bg: #071417;
+                --sidebar-ink: #f8fafc;
+                --sidebar-muted: #d9e8eb;
+                --accent: #005f6b;
+                --accent-strong: #003f48;
+                --accent-soft: #d8f1f4;
+                --danger: #7f1d1d;
+                --warning-bg: #fff7d6;
+                --info-bg: #dff3f7;
+                --success-bg: #ddf4e8;
             }
 
-            .stApp {
+            /* Base clara com texto escuro: evita qualquer herança de texto branco no painel principal. */
+            .stApp,
+            .stApp > div,
+            [data-testid="stAppViewContainer"],
+            [data-testid="stAppViewContainer"] > .main,
+            .main .block-container {
                 background:
-                    linear-gradient(135deg, rgba(13,111,125,0.055), rgba(255,255,255,0) 34%),
-                    radial-gradient(circle at top right, rgba(8,79,91,0.11), transparent 28%),
-                    var(--bg);
-                color: var(--ink);
-            }
-
-            section[data-testid="stSidebar"] {
-                background: #111d22;
-                border-right: 1px solid rgba(255,255,255,0.12);
-            }
-
-            section[data-testid="stSidebar"] h1,
-            section[data-testid="stSidebar"] h2,
-            section[data-testid="stSidebar"] h3,
-            section[data-testid="stSidebar"] h4,
-            section[data-testid="stSidebar"] p,
-            section[data-testid="stSidebar"] label,
-            section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] {
-                color: #eef7f7 !important;
-            }
-
-            section[data-testid="stSidebar"] input,
-            section[data-testid="stSidebar"] textarea,
-            section[data-testid="stSidebar"] div[data-baseweb="input"],
-            section[data-testid="stSidebar"] div[data-baseweb="input"] *,
-            section[data-testid="stSidebar"] div[data-baseweb="select"],
-            section[data-testid="stSidebar"] div[data-baseweb="select"] *,
-            section[data-testid="stSidebar"] div[data-baseweb="textarea"],
-            section[data-testid="stSidebar"] div[data-baseweb="textarea"] * {
-                color: var(--ink) !important;
-                background-color: #ffffff !important;
-            }
-
-            section[data-testid="stSidebar"] button,
-            section[data-testid="stSidebar"] button * {
-                color: #ffffff !important;
+                    linear-gradient(135deg, rgba(0,95,107,0.055), rgba(255,255,255,0) 36%),
+                    radial-gradient(circle at top right, rgba(0,63,72,0.11), transparent 30%),
+                    var(--page-bg) !important;
+                color: var(--page-ink) !important;
             }
 
             .main .block-container {
@@ -224,64 +211,170 @@ def apply_page_style() -> None:
                 padding-bottom: 3rem;
             }
 
-            h1, h2, h3, h4, h5, h6,
-            p, label, span,
-            div[data-testid="stMarkdownContainer"],
-            div[data-testid="stCaptionContainer"],
-            div[data-testid="stExpander"] details summary,
-            div[data-testid="stExpander"] details summary * {
-                color: var(--ink);
+            .stApp h1,
+            .stApp h2,
+            .stApp h3,
+            .stApp h4,
+            .stApp h5,
+            .stApp h6,
+            .stApp p,
+            .stApp label,
+            .stApp span,
+            .stApp small,
+            .stApp div[data-testid="stMarkdownContainer"],
+            .stApp div[data-testid="stMarkdownContainer"] *,
+            .stApp div[data-testid="stWidgetLabel"],
+            .stApp div[data-testid="stWidgetLabel"] *,
+            .stApp div[data-testid="stCaptionContainer"],
+            .stApp div[data-testid="stCaptionContainer"] * {
+                color: var(--page-ink) !important;
             }
 
-            div[data-testid="stCaptionContainer"],
-            div[data-testid="stCaptionContainer"] * {
-                color: var(--muted) !important;
+            .stApp div[data-testid="stCaptionContainer"],
+            .stApp div[data-testid="stCaptionContainer"] * {
+                color: var(--page-muted) !important;
             }
 
-            input, textarea,
-            div[data-baseweb="input"],
-            div[data-baseweb="input"] *,
-            div[data-baseweb="select"],
-            div[data-baseweb="select"] *,
-            div[data-baseweb="textarea"],
-            div[data-baseweb="textarea"] *,
-            div[data-baseweb="popover"] *,
-            ul[role="listbox"] *,
-            li[role="option"] * {
-                color: var(--ink) !important;
-                background-color: #ffffff;
+            /* Sidebar escura com texto claro. As regras vêm depois da base para vencer a cascata. */
+            section[data-testid="stSidebar"],
+            section[data-testid="stSidebar"] > div {
+                background: var(--sidebar-bg) !important;
+                color: var(--sidebar-ink) !important;
+                border-right: 1px solid rgba(255,255,255,0.18) !important;
             }
 
-            div[data-baseweb="select"] svg,
-            div[data-baseweb="input"] svg {
-                color: var(--accent-dark) !important;
-                fill: var(--accent-dark) !important;
+            section[data-testid="stSidebar"] h1,
+            section[data-testid="stSidebar"] h2,
+            section[data-testid="stSidebar"] h3,
+            section[data-testid="stSidebar"] h4,
+            section[data-testid="stSidebar"] h5,
+            section[data-testid="stSidebar"] h6,
+            section[data-testid="stSidebar"] p,
+            section[data-testid="stSidebar"] label,
+            section[data-testid="stSidebar"] span,
+            section[data-testid="stSidebar"] small,
+            section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"],
+            section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] *,
+            section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"],
+            section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] *,
+            section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"],
+            section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] * {
+                color: var(--sidebar-ink) !important;
             }
 
-            button[kind="primary"],
-            button[kind="primary"] * {
-                color: #ffffff !important;
+            section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"],
+            section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] * {
+                color: var(--sidebar-muted) !important;
+            }
+
+            /* Campos de formulário: fundo sempre claro e texto sempre escuro, inclusive no menu suspenso. */
+            .stApp input,
+            .stApp textarea,
+            .stApp div[data-baseweb="input"],
+            .stApp div[data-baseweb="input"] *,
+            .stApp div[data-baseweb="textarea"],
+            .stApp div[data-baseweb="textarea"] *,
+            .stApp div[data-baseweb="select"],
+            .stApp div[data-baseweb="select"] *,
+            .stApp div[data-baseweb="popover"],
+            .stApp div[data-baseweb="popover"] *,
+            .stApp ul[role="listbox"],
+            .stApp ul[role="listbox"] *,
+            .stApp li[role="option"],
+            .stApp li[role="option"] * {
+                background-color: var(--panel-bg) !important;
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
+            }
+
+            .stApp input::placeholder,
+            .stApp textarea::placeholder {
+                color: #475569 !important;
+                opacity: 1 !important;
+            }
+
+            .stApp div[data-baseweb="input"],
+            .stApp div[data-baseweb="textarea"],
+            .stApp div[data-baseweb="select"] {
+                border: 1px solid var(--panel-line) !important;
+                box-shadow: none !important;
+            }
+
+            .stApp div[data-baseweb="select"] svg,
+            .stApp div[data-baseweb="input"] svg,
+            .stApp div[data-baseweb="textarea"] svg {
+                color: var(--accent-strong) !important;
+                fill: var(--accent-strong) !important;
+            }
+
+            .stApp li[role="option"][aria-selected="true"],
+            .stApp li[role="option"][aria-selected="true"] *,
+            .stApp li[role="option"]:hover,
+            .stApp li[role="option"]:hover * {
+                background-color: var(--accent-soft) !important;
+                color: var(--accent-strong) !important;
+            }
+
+            /* Botões: o texto nunca depende da cor herdada do container. */
+            .stApp button,
+            .stApp button * {
+                color: var(--accent-strong) !important;
+            }
+
+            .stApp button[kind="primary"],
+            .stApp button[kind="primary"] *,
+            section[data-testid="stSidebar"] button,
+            section[data-testid="stSidebar"] button * {
                 background-color: var(--accent) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+                border-color: #6ecbd4 !important;
             }
 
-            button[kind="secondary"],
-            button[kind="secondary"] * {
-                color: var(--accent-dark) !important;
+            .stApp button[kind="secondary"] {
+                background-color: var(--panel-bg) !important;
+                border: 1px solid var(--accent) !important;
             }
 
-            button[role="tab"],
-            button[role="tab"] * {
-                color: var(--ink) !important;
+            .stApp button[kind="secondary"] *,
+            .stApp div[data-testid="stDownloadButton"] button,
+            .stApp div[data-testid="stDownloadButton"] button * {
+                color: var(--accent-strong) !important;
+                -webkit-text-fill-color: var(--accent-strong) !important;
             }
 
-            button[role="tab"][aria-selected="true"],
-            button[role="tab"][aria-selected="true"] * {
-                color: var(--accent-dark) !important;
-                font-weight: 800;
+            section[data-testid="stSidebar"] button[kind="secondary"],
+            section[data-testid="stSidebar"] button[kind="secondary"] * {
+                background-color: var(--accent) !important;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff !important;
+            }
+
+            /* Abas e expansores: rótulos escuros no painel principal, sem texto claro sobre fundo claro. */
+            .stApp button[role="tab"],
+            .stApp button[role="tab"] * {
+                background-color: transparent !important;
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
+            }
+
+            .stApp button[role="tab"][aria-selected="true"],
+            .stApp button[role="tab"][aria-selected="true"] * {
+                color: var(--accent-strong) !important;
+                -webkit-text-fill-color: var(--accent-strong) !important;
+                font-weight: 800 !important;
+            }
+
+            .stApp div[data-testid="stExpander"] details,
+            .stApp div[data-testid="stExpander"] details summary,
+            .stApp div[data-testid="stExpander"] details summary * {
+                background-color: var(--panel-bg) !important;
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
             }
 
             .technical-kicker {
-                color: var(--accent-dark);
+                color: var(--accent-strong) !important;
                 font-size: 0.78rem;
                 font-weight: 800;
                 letter-spacing: 0.14em;
@@ -290,7 +383,7 @@ def apply_page_style() -> None:
             }
 
             .technical-title {
-                color: var(--ink);
+                color: var(--page-ink) !important;
                 font-size: clamp(2.1rem, 4vw, 4.6rem);
                 line-height: 0.96;
                 font-weight: 900;
@@ -300,7 +393,7 @@ def apply_page_style() -> None:
 
             .technical-subtitle {
                 max-width: 940px;
-                color: var(--muted);
+                color: var(--page-muted) !important;
                 font-size: 1.05rem;
                 line-height: 1.7;
                 border-left: 4px solid var(--accent);
@@ -308,49 +401,77 @@ def apply_page_style() -> None:
                 margin-bottom: 1.6rem;
             }
 
-            div[data-testid="stMetric"] {
-                background: rgba(255,255,255,0.92);
-                border: 1px solid var(--line);
-                box-shadow: 0 12px 30px rgba(31,42,46,0.06);
+            .technical-subtitle strong {
+                color: var(--accent-strong) !important;
+            }
+
+            .stApp div[data-testid="stMetric"] {
+                background: var(--panel-bg) !important;
+                border: 1px solid var(--panel-line) !important;
+                box-shadow: 0 12px 30px rgba(17,24,39,0.09) !important;
                 padding: 1rem 1rem 0.75rem 1rem;
             }
 
-            div[data-testid="stMetric"],
-            div[data-testid="stMetric"] * {
-                color: var(--ink) !important;
+            .stApp div[data-testid="stMetric"],
+            .stApp div[data-testid="stMetric"] * {
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
             }
 
-            div[data-testid="stMetric"] label,
-            div[data-testid="stMetric"] label * {
-                color: var(--muted) !important;
+            .stApp div[data-testid="stMetric"] label,
+            .stApp div[data-testid="stMetric"] label * {
+                color: var(--page-muted) !important;
+                -webkit-text-fill-color: var(--page-muted) !important;
             }
 
-            div[data-testid="stDataFrame"] {
-                border: 1px solid var(--line);
-                box-shadow: 0 18px 45px rgba(31,42,46,0.07);
+            .stApp div[data-testid="stDataFrame"] {
+                background-color: var(--panel-bg) !important;
+                border: 1px solid var(--panel-line) !important;
+                box-shadow: 0 18px 45px rgba(17,24,39,0.10) !important;
             }
 
-            .stAlert {
-                border-radius: 0.25rem;
-                color: var(--ink) !important;
+            .stApp div[data-testid="stDataFrame"] *,
+            .stApp div[data-testid="stTable"] *,
+            .stApp table,
+            .stApp table * {
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
             }
 
-            .stAlert * {
-                color: var(--ink) !important;
+            /* Alertas e mensagens: cada bloco recebe fundo claro explícito com texto escuro. */
+            .stApp .stAlert,
+            .stApp div[data-testid="stAlert"] {
+                background-color: var(--info-bg) !important;
+                color: var(--page-ink) !important;
+                border: 1px solid var(--panel-line) !important;
+                border-radius: 0.25rem !important;
             }
 
-            code {
-                color: #0b4852 !important;
-                background: #e7eeee !important;
-                border: 1px solid #cbd9dc;
-                padding: 0.08rem 0.24rem;
+            .stApp .stAlert *,
+            .stApp div[data-testid="stAlert"] *,
+            section[data-testid="stSidebar"] .stAlert *,
+            section[data-testid="stSidebar"] div[data-testid="stAlert"] * {
+                color: var(--page-ink) !important;
+                -webkit-text-fill-color: var(--page-ink) !important;
+            }
+
+            .stApp code,
+            .stApp pre,
+            .stApp pre * {
+                color: #062f35 !important;
+                -webkit-text-fill-color: #062f35 !important;
+                background: #eef8f9 !important;
+                border: 1px solid #a8cdd2 !important;
                 border-radius: 0.2rem;
+            }
+
+            .stApp hr {
+                border-color: var(--panel-line) !important;
             }
         </style>
         """,
         unsafe_allow_html=True,
     )
-
 
 def render_header() -> None:
     st.markdown(
@@ -502,16 +623,27 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
     fig.update_traces(line=dict(color="#0d6f7d", width=2.5), marker=dict(size=6, color="#084f5b"))
     fig.update_layout(
         height=chart_height,
-        margin=dict(l=24, r=24, t=62, b=34),
-        font=dict(family="Segoe UI, Arial, sans-serif", color="#1f2a2e"),
-        title=dict(font=dict(size=18, color="#1f2a2e")),
-        plot_bgcolor="rgba(255,255,255,0.88)",
-        paper_bgcolor="rgba(255,255,255,0)",
-        xaxis=dict(showgrid=True, gridcolor="#d8e0e2", title="LocalCol", zeroline=False),
+        margin=dict(l=30, r=30, t=66, b=42),
+        font=dict(family="Segoe UI, Arial, sans-serif", color="#111827", size=13),
+        title=dict(font=dict(size=19, color="#111827")),
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+        hoverlabel=dict(bgcolor="#ffffff", font_color="#111827", bordercolor="#005f6b"),
+        legend=dict(font=dict(color="#111827")),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor="#cbd5e1",
+            title=dict(text="LocalCol", font=dict(color="#111827")),
+            tickfont=dict(color="#111827"),
+            linecolor="#475569",
+            zeroline=False,
+        ),
         yaxis=dict(
             showgrid=True,
-            gridcolor="#d8e0e2",
-            title=f"{selected_force_col} (KGF)",
+            gridcolor="#cbd5e1",
+            title=dict(text=f"{selected_force_col} (KGF)", font=dict(color="#111827")),
+            tickfont=dict(color="#111827"),
+            linecolor="#475569",
             range=list(active_y_range) if active_y_range is not None else None,
             zeroline=False,
         ),
