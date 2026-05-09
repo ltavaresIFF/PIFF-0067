@@ -84,7 +84,17 @@ O caractere `?` representa um parâmetro enviado ao `pyodbc`. Essa abordagem evi
 
 ## Visualizações geradas
 
-A aplicação exibe a tabela completa dos registros retornados e gera um gráfico de linha com `LocalCol` no eixo X e `Cilindro_##_ID_Teste` no eixo Y, conforme solicitado no plano original. Como os registros são filtrados por um único teste, o valor do identificador de teste tende a ser constante; nesse caso, o gráfico pode aparecer como uma linha horizontal, o que é esperado para essa regra de visualização.
+A aplicação exibe a tabela completa dos registros retornados e gera um gráfico de linha com `LocalCol` no eixo X. No eixo Y, o operador pode selecionar uma ou mais variáveis disponíveis no registro do teste. A força em KGF continua como seleção padrão quando a coluna existir, e a interface também aceita pressão do compressor, pressão reguladora do skid, temperatura ambiente e o setpoint do cilindro selecionado.
+
+| Variável do eixo Y | Nome de coluna esperado |
+|---|---|
+| Força do skid em KGF | `PLCnext_Arp_Plc_Eclr_FORCA_SKID_#_G#_KGF` |
+| Pressão do compressor | `PLCnext_Arp_Plc_Eclr_PRESSAO_COMPRESSOR` |
+| Pressão reguladora do skid 1 | `PLCnext_Arp_Plc_Eclr_PRESSAO_REGULADORA_SKID_1` |
+| Temperatura ambiente | `PLCnext_Arp_Plc_Eclr_TEMPERATURA_AMBIENTE` |
+| Setpoint do cilindro selecionado | `Cilindro_##_Setpoint` |
+
+Quando alguma dessas variáveis não existir na tabela retornada para o cilindro/teste selecionado, a aplicação informa a ausência em uma legenda abaixo do seletor do gráfico, sem interromper a visualização das demais séries encontradas.
 
 ## Tratamento de erros
 

@@ -25,6 +25,23 @@ except ModuleNotFoundError:  # pragma: no cover - exibido na própria interface
 DEFAULT_DB_PATH = r"C:\Supervisorio\DLOGGERS\projeto_54_DLR.mdb"
 FORCE_COLUMN_PATTERN = re.compile(r"^PLCnext_Arp_Plc_Eclr_FORCA_SKID_\d+_G\d+_KGF$", re.IGNORECASE)
 
+ADDITIONAL_Y_AXIS_COLUMNS = {
+    "PLCnext_Arp_Plc_Eclr_PRESSAO_COMPRESSOR": "Pressão do compressor",
+    "PLCnext_Arp_Plc_Eclr_PRESSAO_REGULADORA_SKID_1": "Pressão reguladora do skid 1",
+    "PLCnext_Arp_Plc_Eclr_TEMPERATURA_AMBIENTE": "Temperatura ambiente",
+}
+
+CHART_SERIES_COLORS = (
+    "#0d6f7d",
+    "#7c2d12",
+    "#1d4ed8",
+    "#6d28d9",
+    "#047857",
+    "#be123c",
+    "#a16207",
+    "#334155",
+)
+
 CYLINDER_CONFIG = {
     cylinder: {
         "label": f"Cilindro {cylinder:02d}",
@@ -480,8 +497,8 @@ def render_header() -> None:
         <h1 class="technical-title">Visualizador MDB<br/>de testes de cilindros</h1>
         <p class="technical-subtitle">
             Selecione o cilindro de 01 a 10, carregue os IDs de teste disponíveis na tabela correspondente
-            e visualize os registros completos junto ao gráfico solicitado de <strong>LocalCol</strong> no eixo X versus
-            <strong>PLCnext_Arp_Plc_Eclr_FORCA_SKID_#_G#_KGF</strong> no eixo Y.
+            e visualize os registros completos junto ao gráfico de <strong>LocalCol</strong> no eixo X versus
+            força, pressão, temperatura ambiente e/ou setpoint do cilindro no eixo Y.
         </p>
         """,
         unsafe_allow_html=True,
@@ -520,10 +537,61 @@ def find_force_columns(df: pd.DataFrame) -> list[str]:
     return fallback_matches
 
 
-def calculate_numeric_axis_range(series: pd.Series) -> tuple[float, float] | None:
-    """Calcula limites legíveis para séries numéricas, incluindo séries constantes."""
+def setpoint_column_for_cylinder(cylinder: int) -> str:
+    """Retorna o nome da coluna de setpoint vinculada ao cilindro selecionado."""
 
-    numeric_series = pd.to_numeric(series, errors="coerce").dropna()
+    return f"Cilindro_{cylinder:02d}_Setpoint"
+
+
+def describe_y_axis_column(column: str, cylinder: int) -> str:
+    """Gera um rótulo operacional legível para a coluna selecionada no eixo Y."""
+
+    if FORCE_COLUMN_PATTERN.match(str(column)) or "FORCA_SKID" in str(column).upper():
+        return f"Força do skid em KGF · {column}"
+
+    setpoint_column = setpoint_column_for_cylinder(cylinder)
+    if column == setpoint_column:
+        return f"Setpoint do cilindro {cylinder:02d} · {column}"
+
+    return f"{ADDITIONAL_Y_AXIS_COLUMNS.get(column, column)} · {column}"
+
+
+def build_y_axis_options(df: pd.DataFrame, cylinder: int) -> tuple[list[str], list[str]]:
+    """Monta as opções disponíveis e informa as colunas solicitadas que não existem no teste."""
+
+    requested_columns = list(ADDITIONAL_Y_AXIS_COLUMNS) + [setpoint_column_for_cylinder(cylinder)]
+    available_columns: list[str] = []
+
+    for column in find_force_columns(df):
+        if column in df.columns and column not in available_columns:
+            available_columns.append(column)
+
+    for column in requested_columns:
+        if column in df.columns and column not in available_columns:
+            available_columns.append(column)
+
+    missing_requested_columns = [column for column in requested_columns if column not in df.columns]
+    return available_columns, missing_requested_columns
+
+
+def default_y_axis_selection(options: list[str]) -> list[str]:
+    """Mantém a força como padrão quando disponível e evita abrir o gráfico sem variável."""
+
+    force_columns = [column for column in options if FORCE_COLUMN_PATTERN.match(str(column)) or "FORCA_SKID" in str(column).upper()]
+    if force_columns:
+        return [force_columns[0]]
+
+    return options[:1]
+
+
+def calculate_numeric_axis_range(values: pd.Series | pd.DataFrame) -> tuple[float, float] | None:
+    """Calcula limites legíveis para uma ou mais séries numéricas, incluindo séries constantes."""
+
+    if isinstance(values, pd.DataFrame):
+        numeric_series = pd.to_numeric(values.stack(), errors="coerce").dropna()
+    else:
+        numeric_series = pd.to_numeric(values, errors="coerce").dropna()
+
     if numeric_series.empty:
         return None
 
@@ -547,10 +615,10 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
         st.warning("A coluna LocalCol não foi localizada nos registros retornados; o gráfico não pôde ser gerado.")
         return
 
-    force_columns = find_force_columns(df)
-    if not force_columns:
+    y_axis_options, missing_requested_columns = build_y_axis_options(df, cylinder)
+    if not y_axis_options:
         st.warning(
-            "Nenhuma coluna de força no padrão `PLCnext_Arp_Plc_Eclr_FORCA_SKID_#_G#_KGF` foi localizada nos registros retornados."
+            "Nenhuma das variáveis configuradas para o eixo Y foi localizada nos registros retornados."
         )
         with st.expander("Colunas disponíveis para conferência", expanded=False):
             st.dataframe(pd.DataFrame({"Colunas retornadas": list(df.columns)}), use_container_width=True, hide_index=True)
@@ -561,25 +629,46 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
     if parsed_local_col.notna().any():
         chart_df["LocalCol"] = parsed_local_col
 
-    selected_force_col = force_columns[0]
-    if len(force_columns) > 1:
-        selected_force_col = st.selectbox(
-            "Coluna de força para o eixo Y",
-            options=force_columns,
-            help="Foram encontradas múltiplas colunas compatíveis com o padrão de força; selecione a série desejada.",
-        )
-    else:
-        st.info(f"Coluna de força usada no eixo Y: `{selected_force_col}`")
+    selected_y_columns = st.multiselect(
+        "Variáveis do eixo Y",
+        options=y_axis_options,
+        default=default_y_axis_selection(y_axis_options),
+        format_func=lambda column: describe_y_axis_column(str(column), cylinder),
+        help=(
+            "Selecione uma ou mais séries para plotar contra LocalCol. A força em KGF continua como padrão quando existir; "
+            "também são aceitas pressão do compressor, pressão reguladora do skid, temperatura ambiente e setpoint do cilindro."
+        ),
+    )
 
-    chart_df[selected_force_col] = pd.to_numeric(chart_df[selected_force_col], errors="coerce")
-    valid_chart_df = chart_df.dropna(subset=["LocalCol", selected_force_col])
-    if valid_chart_df.empty:
+    if missing_requested_columns:
+        st.caption(
+            "Variáveis solicitadas que não foram encontradas neste teste/tabela: "
+            + ", ".join(f"`{column}`" for column in missing_requested_columns)
+        )
+
+    if not selected_y_columns:
+        st.warning("Selecione pelo menos uma variável para desenhar o eixo Y do gráfico.")
+        return
+
+    for column in selected_y_columns:
+        chart_df[column] = pd.to_numeric(chart_df[column], errors="coerce")
+
+    valid_chart_df = chart_df.dropna(subset=["LocalCol"]).copy()
+    numeric_y_columns = [column for column in selected_y_columns if valid_chart_df[column].notna().any()]
+    if not numeric_y_columns:
         st.warning(
-            f"A coluna `{selected_force_col}` foi encontrada, mas não possui valores numéricos válidos para plotagem."
+            "As variáveis selecionadas foram localizadas, mas não possuem valores numéricos válidos para plotagem."
         )
         return
 
-    default_y_range = calculate_numeric_axis_range(valid_chart_df[selected_force_col])
+    if len(numeric_y_columns) < len(selected_y_columns):
+        ignored_columns = [column for column in selected_y_columns if column not in numeric_y_columns]
+        st.warning(
+            "As seguintes variáveis não possuem valores numéricos válidos e foram ignoradas: "
+            + ", ".join(f"`{column}`" for column in ignored_columns)
+        )
+
+    default_y_range = calculate_numeric_axis_range(valid_chart_df[numeric_y_columns])
 
     with st.expander("Escala do gráfico", expanded=True):
         scale_col_1, scale_col_2, scale_col_3 = st.columns([1.15, 0.9, 0.9])
@@ -587,7 +676,7 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
             "Escala do eixo Y",
             options=("Automática com margem", "Manual"),
             horizontal=True,
-            help="A opção automática adiciona margem visual à série de força em KGF.",
+            help="A opção automática adiciona margem visual considerando todas as séries selecionadas.",
         )
         chart_height = scale_col_2.slider("Altura", min_value=320, max_value=900, value=520, step=20)
         show_markers = scale_col_3.toggle("Mostrar pontos", value=True)
@@ -595,14 +684,12 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
         manual_y_range: tuple[float, float] | None = None
         if scale_mode == "Manual":
             if default_y_range is None:
-                st.warning(
-                    f"A coluna {selected_force_col} não pôde ser convertida para número. A escala manual do eixo Y ficará desativada."
-                )
+                st.warning("As variáveis selecionadas não puderam ser convertidas para número.")
             else:
                 manual_col_1, manual_col_2 = st.columns(2)
                 y_min_default, y_max_default = default_y_range
-                y_min = manual_col_1.number_input("Força mínima no eixo Y (KGF)", value=float(y_min_default), format="%.6f")
-                y_max = manual_col_2.number_input("Força máxima no eixo Y (KGF)", value=float(y_max_default), format="%.6f")
+                y_min = manual_col_1.number_input("Valor mínimo no eixo Y", value=float(y_min_default), format="%.6f")
+                y_max = manual_col_2.number_input("Valor máximo no eixo Y", value=float(y_max_default), format="%.6f")
 
                 if y_min >= y_max:
                     st.error("O valor mínimo do eixo Y deve ser menor que o valor máximo.")
@@ -611,16 +698,20 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
                 manual_y_range = (float(y_min), float(y_max))
 
     active_y_range = manual_y_range if scale_mode == "Manual" else default_y_range
+    chart_title = "LocalCol vs variável selecionada" if len(numeric_y_columns) == 1 else "LocalCol vs variáveis selecionadas"
 
     fig = px.line(
         valid_chart_df,
         x="LocalCol",
-        y=selected_force_col,
+        y=numeric_y_columns,
         markers=show_markers,
-        title=f"LocalCol vs Força do skid (KGF)",
+        title=chart_title,
         template="plotly_white",
+        labels={"value": "Valor", "variable": "Variável", "LocalCol": "LocalCol"},
+        color_discrete_sequence=list(CHART_SERIES_COLORS),
     )
-    fig.update_traces(line=dict(color="#0d6f7d", width=2.5), marker=dict(size=6, color="#084f5b"))
+    fig.for_each_trace(lambda trace: trace.update(name=describe_y_axis_column(str(trace.name), cylinder)))
+    fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
     fig.update_layout(
         height=chart_height,
         margin=dict(l=30, r=30, t=66, b=42),
@@ -629,7 +720,7 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
         hoverlabel=dict(bgcolor="#ffffff", font_color="#111827", bordercolor="#005f6b"),
-        legend=dict(font=dict(color="#111827")),
+        legend=dict(font=dict(color="#111827"), title=dict(text="Variável", font=dict(color="#111827"))),
         xaxis=dict(
             showgrid=True,
             gridcolor="#cbd5e1",
@@ -641,7 +732,7 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
         yaxis=dict(
             showgrid=True,
             gridcolor="#cbd5e1",
-            title=dict(text=f"{selected_force_col} (KGF)", font=dict(color="#111827")),
+            title=dict(text="Valor das variáveis selecionadas", font=dict(color="#111827")),
             tickfont=dict(color="#111827"),
             linecolor="#475569",
             range=list(active_y_range) if active_y_range is not None else None,
@@ -651,9 +742,9 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
 
     st.plotly_chart(fig, use_container_width=True)
     st.caption(
-        "O eixo X utiliza `LocalCol` e o eixo Y utiliza a coluna de força em KGF no padrão "
-        "`PLCnext_Arp_Plc_Eclr_FORCA_SKID_#_G#_KGF`. A escala automática aplica margem visual; "
-        "use a escala manual para fixar limites específicos de força."
+        "O eixo X utiliza `LocalCol`. No eixo Y, selecione força KGF, pressão do compressor, pressão reguladora, "
+        "temperatura ambiente e/ou o setpoint do cilindro escolhido. A escala automática aplica margem visual "
+        "considerando as séries selecionadas; use a escala manual quando precisar fixar limites."
     )
 
 
@@ -719,7 +810,7 @@ def main() -> None:
 
         st.divider()
 
-        chart_tab, data_tab, sql_tab = st.tabs(["Gráfico de força", "Tabela de dados", "Consulta aplicada"])
+        chart_tab, data_tab, sql_tab = st.tabs(["Gráfico de variáveis", "Tabela de dados", "Consulta aplicada"])
 
         with chart_tab:
             build_chart(records_df, cylinder)
