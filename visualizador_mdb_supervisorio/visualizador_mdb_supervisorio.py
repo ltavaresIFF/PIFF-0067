@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 try:
@@ -606,6 +606,79 @@ def calculate_numeric_axis_range(values: pd.Series | pd.DataFrame) -> tuple[floa
     return min_value - padding, max_value + padding
 
 
+def plotly_y_axis_ref(index: int) -> str:
+    """Retorna a referência de eixo Y usada pelos traces do Plotly."""
+
+    return "y" if index == 0 else f"y{index + 1}"
+
+
+def plotly_y_axis_layout_key(index: int) -> str:
+    """Retorna a chave de layout correspondente ao eixo Y no Plotly."""
+
+    return "yaxis" if index == 0 else f"yaxis{index + 1}"
+
+
+def calculate_multi_axis_domain(axis_count: int) -> tuple[float, float]:
+    """Reserva espaço horizontal para rótulos de múltiplos eixos sem esmagar a área do gráfico."""
+
+    if axis_count <= 1:
+        return 0.07, 0.98
+
+    left_axes = (axis_count + 1) // 2
+    right_axes = axis_count // 2
+    left_margin = min(0.09 + max(left_axes - 1, 0) * 0.045, 0.24)
+    right_margin = min(0.09 + max(right_axes - 1, 0) * 0.045, 0.24)
+    return left_margin, 1.0 - right_margin
+
+
+def build_independent_y_axis_layout(
+    columns: list[str],
+    chart_df: pd.DataFrame,
+    cylinder: int,
+) -> tuple[dict[str, dict[str, Any]], tuple[float, float]]:
+    """Cria uma configuração de eixo Y independente para cada variável selecionada."""
+
+    x_domain_start, x_domain_end = calculate_multi_axis_domain(len(columns))
+    layout_updates: dict[str, dict[str, Any]] = {}
+    left_extra_index = 0
+    right_extra_index = 0
+
+    for index, column in enumerate(columns):
+        color = CHART_SERIES_COLORS[index % len(CHART_SERIES_COLORS)]
+        title = describe_y_axis_column(str(column), cylinder)
+        side = "left" if index % 2 == 0 else "right"
+        axis_config: dict[str, Any] = {
+            "title": {"text": title, "font": {"color": color, "size": 12}},
+            "tickfont": {"color": color, "size": 11},
+            "linecolor": color,
+            "tickcolor": color,
+            "showline": True,
+            "mirror": False,
+            "zeroline": False,
+            "showgrid": index == 0,
+            "gridcolor": "#cbd5e1" if index == 0 else "rgba(0,0,0,0)",
+            "range": list(calculate_numeric_axis_range(chart_df[column])) if calculate_numeric_axis_range(chart_df[column]) is not None else None,
+            "side": side,
+        }
+
+        if index == 0:
+            axis_config["anchor"] = "x"
+        else:
+            axis_config["overlaying"] = "y"
+            axis_config["anchor"] = "free"
+            if side == "left":
+                left_extra_index += 1
+                position = max(0.0, x_domain_start - 0.045 * left_extra_index)
+            else:
+                position = min(1.0, x_domain_end + 0.045 * right_extra_index)
+                right_extra_index += 1
+            axis_config["position"] = position
+
+        layout_updates[plotly_y_axis_layout_key(index)] = axis_config
+
+    return layout_updates, (x_domain_start, x_domain_end)
+
+
 def build_chart(df: pd.DataFrame, cylinder: int) -> None:
     if df.empty:
         st.info("Não há dados para gerar o gráfico do teste selecionado.")
@@ -635,8 +708,8 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
         default=default_y_axis_selection(y_axis_options),
         format_func=lambda column: describe_y_axis_column(str(column), cylinder),
         help=(
-            "Selecione uma ou mais séries para plotar contra LocalCol. A força em KGF continua como padrão quando existir; "
-            "também são aceitas pressão do compressor, pressão reguladora do skid, temperatura ambiente e setpoint do cilindro."
+            "Selecione uma ou mais séries para plotar contra LocalCol. Cada série recebe escala própria no eixo Y, "
+            "evitando que pressão, temperatura, setpoint e força sejam comprimidos em uma única escala."
         ),
     )
 
@@ -668,60 +741,56 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
             + ", ".join(f"`{column}`" for column in ignored_columns)
         )
 
-    default_y_range = calculate_numeric_axis_range(valid_chart_df[numeric_y_columns])
-
-    with st.expander("Escala do gráfico", expanded=True):
-        scale_col_1, scale_col_2, scale_col_3 = st.columns([1.15, 0.9, 0.9])
-        scale_mode = scale_col_1.radio(
-            "Escala do eixo Y",
-            options=("Automática com margem", "Manual"),
-            horizontal=True,
-            help="A opção automática adiciona margem visual considerando todas as séries selecionadas.",
+    with st.expander("Escalas e aparência do gráfico", expanded=True):
+        st.info(
+            "Cada variável selecionada recebe sua própria escala no eixo Y. Os eixos são alternados entre esquerda e direita "
+            "e usam a mesma cor da respectiva linha para facilitar a leitura."
         )
-        chart_height = scale_col_2.slider("Altura", min_value=320, max_value=900, value=520, step=20)
-        show_markers = scale_col_3.toggle("Mostrar pontos", value=True)
+        scale_col_1, scale_col_2 = st.columns([0.9, 0.9])
+        chart_height = scale_col_1.slider("Altura", min_value=360, max_value=950, value=560, step=20)
+        show_markers = scale_col_2.toggle("Mostrar pontos", value=True)
 
-        manual_y_range: tuple[float, float] | None = None
-        if scale_mode == "Manual":
-            if default_y_range is None:
-                st.warning("As variáveis selecionadas não puderam ser convertidas para número.")
-            else:
-                manual_col_1, manual_col_2 = st.columns(2)
-                y_min_default, y_max_default = default_y_range
-                y_min = manual_col_1.number_input("Valor mínimo no eixo Y", value=float(y_min_default), format="%.6f")
-                y_max = manual_col_2.number_input("Valor máximo no eixo Y", value=float(y_max_default), format="%.6f")
+    chart_title = "LocalCol vs variável selecionada" if len(numeric_y_columns) == 1 else "LocalCol vs variáveis com escalas independentes"
+    y_axis_layout, x_domain = build_independent_y_axis_layout(numeric_y_columns, valid_chart_df, cylinder)
 
-                if y_min >= y_max:
-                    st.error("O valor mínimo do eixo Y deve ser menor que o valor máximo.")
-                    return
+    fig = go.Figure()
+    for index, column in enumerate(numeric_y_columns):
+        color = CHART_SERIES_COLORS[index % len(CHART_SERIES_COLORS)]
+        label = describe_y_axis_column(str(column), cylinder)
+        mode = "lines+markers" if show_markers else "lines"
+        fig.add_trace(
+            go.Scatter(
+                x=valid_chart_df["LocalCol"],
+                y=valid_chart_df[column],
+                name=label,
+                mode=mode,
+                yaxis=plotly_y_axis_ref(index),
+                line={"color": color, "width": 2.5},
+                marker={"size": 6, "color": color},
+                connectgaps=False,
+                hovertemplate="%{x}<br>" + label + ": %{y}<extra></extra>",
+            )
+        )
 
-                manual_y_range = (float(y_min), float(y_max))
-
-    active_y_range = manual_y_range if scale_mode == "Manual" else default_y_range
-    chart_title = "LocalCol vs variável selecionada" if len(numeric_y_columns) == 1 else "LocalCol vs variáveis selecionadas"
-
-    fig = px.line(
-        valid_chart_df,
-        x="LocalCol",
-        y=numeric_y_columns,
-        markers=show_markers,
-        title=chart_title,
-        template="plotly_white",
-        labels={"value": "Valor", "variable": "Variável", "LocalCol": "LocalCol"},
-        color_discrete_sequence=list(CHART_SERIES_COLORS),
-    )
-    fig.for_each_trace(lambda trace: trace.update(name=describe_y_axis_column(str(trace.name), cylinder)))
-    fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
     fig.update_layout(
         height=chart_height,
-        margin=dict(l=30, r=30, t=66, b=42),
+        margin=dict(l=34, r=34, t=72, b=46),
         font=dict(family="Segoe UI, Arial, sans-serif", color="#111827", size=13),
-        title=dict(font=dict(size=19, color="#111827")),
+        title=dict(text=chart_title, font=dict(size=19, color="#111827")),
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
         hoverlabel=dict(bgcolor="#ffffff", font_color="#111827", bordercolor="#005f6b"),
-        legend=dict(font=dict(color="#111827"), title=dict(text="Variável", font=dict(color="#111827"))),
+        legend=dict(
+            font=dict(color="#111827"),
+            title=dict(text="Variável", font=dict(color="#111827")),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
         xaxis=dict(
+            domain=list(x_domain),
             showgrid=True,
             gridcolor="#cbd5e1",
             title=dict(text="LocalCol", font=dict(color="#111827")),
@@ -729,22 +798,14 @@ def build_chart(df: pd.DataFrame, cylinder: int) -> None:
             linecolor="#475569",
             zeroline=False,
         ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor="#cbd5e1",
-            title=dict(text="Valor das variáveis selecionadas", font=dict(color="#111827")),
-            tickfont=dict(color="#111827"),
-            linecolor="#475569",
-            range=list(active_y_range) if active_y_range is not None else None,
-            zeroline=False,
-        ),
+        **y_axis_layout,
     )
 
     st.plotly_chart(fig, use_container_width=True)
     st.caption(
-        "O eixo X utiliza `LocalCol`. No eixo Y, selecione força KGF, pressão do compressor, pressão reguladora, "
-        "temperatura ambiente e/ou o setpoint do cilindro escolhido. A escala automática aplica margem visual "
-        "considerando as séries selecionadas; use a escala manual quando precisar fixar limites."
+        "O eixo X utiliza `LocalCol`. Cada variável selecionada no eixo Y tem escala automática própria, "
+        "com eixo colorido conforme a série correspondente. Isso permite comparar tendências sem misturar unidades "
+        "como KGF, pressão, temperatura e setpoint na mesma escala numérica."
     )
 
 

@@ -84,7 +84,7 @@ O caractere `?` representa um parâmetro enviado ao `pyodbc`. Essa abordagem evi
 
 ## Visualizações geradas
 
-A aplicação exibe a tabela completa dos registros retornados e gera um gráfico de linha com `LocalCol` no eixo X. No eixo Y, o operador pode selecionar uma ou mais variáveis disponíveis no registro do teste. A força em KGF continua como seleção padrão quando a coluna existir, e a interface também aceita pressão do compressor, pressão reguladora do skid, temperatura ambiente e o setpoint do cilindro selecionado.
+A aplicação exibe a tabela completa dos registros retornados e gera um gráfico de linha com `LocalCol` no eixo X. No eixo Y, o operador pode selecionar uma ou mais variáveis disponíveis no registro do teste. **Cada variável selecionada recebe uma escala Y independente**, com eixo e linha na mesma cor, evitando que grandezas diferentes, como KGF, pressão, temperatura e setpoint, sejam comprimidas em uma única escala numérica. A força em KGF continua como seleção padrão quando a coluna existir, e a interface também aceita pressão do compressor, pressão reguladora do skid, temperatura ambiente e o setpoint do cilindro selecionado.[5]
 
 | Variável do eixo Y | Nome de coluna esperado |
 |---|---|
@@ -94,7 +94,7 @@ A aplicação exibe a tabela completa dos registros retornados e gera um gráfic
 | Temperatura ambiente | `PLCnext_Arp_Plc_Eclr_TEMPERATURA_AMBIENTE` |
 | Setpoint do cilindro selecionado | `Cilindro_##_Setpoint` |
 
-Quando alguma dessas variáveis não existir na tabela retornada para o cilindro/teste selecionado, a aplicação informa a ausência em uma legenda abaixo do seletor do gráfico, sem interromper a visualização das demais séries encontradas.
+Quando alguma dessas variáveis não existir na tabela retornada para o cilindro/teste selecionado, a aplicação informa a ausência em uma legenda abaixo do seletor do gráfico, sem interromper a visualização das demais séries encontradas. Quando várias séries são selecionadas, os eixos Y são alternados entre esquerda e direita e usam cálculo automático de faixa para cada coluna, mantendo a leitura individual de cada variável.
 
 ## Tratamento de erros
 
@@ -106,3 +106,4 @@ A interface informa mensagens amigáveis para falhas comuns, incluindo caminho d
 [2]: https://github.com/mkleehammer/pyodbc/wiki "pyodbc Wiki"
 [3]: https://docs.streamlit.io/get-started/installation "Streamlit Documentation — Installation"
 [4]: https://plotly.com/python/line-charts/ "Plotly Python — Line Charts"
+[5]: https://plotly.com/python/multiple-axes/ "Plotly Python — Multiple Axes"
